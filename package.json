@@ -1,0 +1,15 @@
+{
+  "name": "lamozi-pay",
+  "version": "1.0.0",
+  "description": " FR : Une application pour connecter la boutique shopify LAMOZI SN à Paydunya afin d'accepter les paiements en ligne. | EN : An application to connect the LAMOZI SN shopify store to Paydunya in order to accept online payments.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Oumar Yanni",
+  "license": "",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
