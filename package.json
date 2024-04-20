@@ -4,12 +4,28 @@
   "description": " FR : Une application pour connecter la boutique shopify LAMOZI SN à Paydunya afin d'accepter les paiements en ligne. | EN : An application to connect the LAMOZI SN shopify store to Paydunya in order to accept online payments.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "babel-node index.js",
+    "build": "babel index.js -d dist"
   },
   "keywords": [],
   "author": "Oumar Yanni",
   "license": "",
   "dependencies": {
-    "express": "^4.18.2"
+    "@babel/polyfill": "^7.12.1",
+    "@shopify/shopify-api": "^9.7.2",
+    "axios": "^1.6.8",
+    "body-parser": "^1.20.2",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "paydunya": "^1.0.12"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.23.9",
+    "@babel/core": "^7.24.0",
+    "@babel/node": "^7.23.9",
+    "@babel/plugin-transform-modules-commonjs": "^7.23.3",
+    "@babel/preset-env": "^7.24.0"
   }
 }
