@@ -60,17 +60,21 @@ var setup = new paydunya.Setup({
 });
 
 // Configure les informations de la boutique pour PayDunya
-var store = new paydunya.Store({
-  name: process.env.STORE_NAME, // Par exemple: 'Ma Boutique'
-  tagline: process.env.STORE_TAGLINE,
-  phoneNumber: process.env.STORE_PHONE,
-  postalAddress: process.env.STORE_ADDRESS,
-  websiteURL: process.env.STORE_WEBSITE,
-  logoURL: process.env.STORE_LOGO_URL,
-  callbackURL: process.env.STORE_GLOBAL_CALLBACK_URL,
-  cancelURL: process.env.STORE_GLOBAL_CANCEL_URL,
-  returnURL: process.env.STORE_GLOBAL_RETURN_URL,
-});
+function configurePayDunyaStore(newOrder) {
+  var store = new paydunya.Store({
+    name: process.env.STORE_NAME,
+    tagline: process.env.STORE_TAGLINE,
+    phoneNumber: process.env.STORE_PHONE,
+    postalAddress: process.env.STORE_ADDRESS,
+    websiteURL: process.env.STORE_WEBSITE,
+    logoURL: process.env.STORE_LOGO_URL,
+    callbackURL: process.env.STORE_GLOBAL_CALLBACK_URL,
+    cancelURL: process.env.STORE_GLOBAL_CANCEL_URL,
+    returnURL: newOrder.order_status_url, // Utilisez l'URL du statut de commande
+  });
+
+  return store;
+}
 
 // Middleware pour parser le JSON
 app.use(
@@ -100,6 +104,7 @@ app.post("/webhook/orders/create", async (req, res) => {
     }
 
     const newOrder = req.body;
+    const store = configurePayDunyaStore(newOrder); // Passez newOrder à la fonction
 
     // Création de l'instance de la facture PayDunya
     var invoice = new paydunya.CheckoutInvoice(setup, store);
@@ -161,6 +166,8 @@ async function markOrderAsPaid(session, orderId) {
       order {
         id
         displayFinancialStatus
+        email
+        canNotifyCustomer
       }
       userErrors {
         field
@@ -187,7 +194,7 @@ async function markOrderAsPaid(session, orderId) {
       console.error("Erreur lors de la mutation GraphQL:", response.errors);
       return false;
     }
-
+    console.log(response.data);
     return true;
   } catch (error) {
     console.error("Erreur lors de la mutation GraphQL:", error);
