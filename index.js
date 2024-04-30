@@ -75,7 +75,7 @@ function configurePayDunyaStore(newOrder) {
     logoURL: process.env.STORE_LOGO_URL,
     callbackURL: process.env.STORE_GLOBAL_CALLBACK_URL,
     cancelURL: process.env.STORE_GLOBAL_CANCEL_URL,
-    returnURL: newOrder.order_status_url, // Utilisez l'URL du statut de commande pour retour vers la boutique Shopify après paiement
+    //returnURL: newOrder.order_status_url, // Utilisez l'URL du statut de commande pour retour vers la boutique Shopify après paiement
   });
 
   return store;
