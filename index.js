@@ -386,17 +386,21 @@ function createInvoiceAndStoreUrl(store, newOrder) {
 // Route pour gérer le Webhook de création de commande
 app.post("/webhook/orders/create", async (req, res) => {
   try {
-    console.log("req.rawBody :", body);
-    const hmacReceived = req.headers["x-shopify-hmac-sha256"];
     const body = req.rawBody;
+    const newOrder = req.body;
 
-    console.log("HMAC reçu:", hmacReceived);
-
+    // Vérification du HMAC pour la sécurité
+    const hmacReceived = req.headers["x-shopify-hmac-sha256"];
     if (!verifyWebhookHmac(body, hmacReceived)) {
       return res.status(401).send("Échec de validation HMAC.");
     }
 
-    const newOrder = req.body;
+    // Filtre pour n'accepter que les commandes provenant de "LAMOZI Pay"
+    if (!newOrder.payment_gateway_names.includes("LAMOZI Pay ")) {
+      return res
+        .status(200)
+        .send("Commande ignorée car non issue de LAMOZI Pay.");
+    }
 
     const store = configurePayDunyaStore(newOrder); // Configuration du store
 
