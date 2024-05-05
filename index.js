@@ -30,6 +30,80 @@ import crypto from "crypto";
 import "@shopify/shopify-api/adapters/node";
 import { url } from "inspector";
 
+// Importe Nodemailer pour envoyer des e-mails depuis notre serveur express
+import nodemailer from "nodemailer";
+import { error } from "console";
+
+// Configuration du transport SMTP avec Nodemailer et OVH
+const transporter = nodemailer.createTransport({
+  host: "ssl0.ovh.net", // Hôte SMTP d'OVH
+  port: 587, // Port SMTP pour TLS
+  secure: false, // `false` pour TLS, `true` pour SSL
+  auth: {
+    user: process.env.EMAIL_USER, // Nom d'utilisateur (votre adresse e-mail OVH)
+    pass: process.env.EMAIL_PASS, // Mot de passe SMTP
+  },
+});
+
+// Fonction pour envoyer un e-mail avec le lien de paiement
+function sendPaymentLinkEmail(toEmail, subject, body) {
+  const mailOptions = {
+    //remplacer par process.env.EMAIL_USER ou "contact@lamozi.sn"
+    from: process.env.EMAIL_USER, // Adresse e-mail de l'expéditeur
+    to: toEmail,
+    subject,
+    html: body,
+  };
+
+  /*try {
+    await transporter.sendMail(mailOptions);
+    console.log("E-mail envoyé avec succès");
+  } catch (error) {
+    console.error("Erreur lors de l'envoi de l'e-mail :", error);
+  }*/
+
+  return transporter
+    .sendMail(mailOptions)
+    .then(() => {
+      console.log("E-mail envoyé avec succès");
+    })
+    .catch((error) => {
+      console.error("Erreur lors de l'envoi de l'e-mail :", error);
+    });
+}
+
+// Fonction pour créer le corps de l'e-mail avec le lien de paiement
+function createEmailBody(paymentUrl) {
+  return `
+    <div style="text-align: center;">
+      <img src="https://cdn.shopify.com/s/files/1/0677/0399/6674/files/LAMOZI_Logo_Type_4_-_BIG_TYPO.png?v=1711412421" alt="Logo LAMOZI" style="width: 200px; margin-bottom: 20px; border-radius: 5px;" />
+      <h2 style="color: #D4641C; font-weight: bold; text-align: center;">Complétez votre paiement</h2>
+      <p>Merci pour votre commande !<br> Pour compléter votre paiement, veuillez utiliser le lien suivant :</p>
+      <a 
+        href="${paymentUrl}"
+        style="
+          text-decoration: none;
+          background-color: #d4641c;
+          border: 1px solid transparent;
+          border-radius: 5px;
+          color: white;
+          font-weight: bold;
+          padding: 1.4em 1.7em;
+          display: inline-block;
+          cursor: pointer;
+          transition: opacity 0.3s ease-in-out;
+          text-align: center;
+        "
+        onmouseover="this.style.opacity = 0.8"
+        onmouseout="this.style.opacity = 1"
+      >
+        Payer maintenant
+      </a>
+      <p>Si vous avez des questions, contactez-nous à contact@lamozi.sn.</p>
+    </div>
+  `;
+}
+
 // Initialise la Shopify API en utilisant la fonction shopifyApi avec les paramètres requis
 const shopify = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -61,7 +135,7 @@ var setup = new paydunya.Setup({
   privateKey: process.env.PAYDUNYA_PRIVATE_KEY,
   publicKey: process.env.PAYDUNYA_PUBLIC_KEY,
   token: process.env.PAYDUNYA_TOKEN,
-  mode: "live", // Utilisez 'live' pour le mode production
+  mode: "test", // Utilisez 'live' pour le mode production
 });
 
 // Configure les informations de la boutique pour PayDunya
@@ -75,7 +149,7 @@ function configurePayDunyaStore(newOrder) {
     logoURL: process.env.STORE_LOGO_URL,
     callbackURL: process.env.STORE_GLOBAL_CALLBACK_URL,
     cancelURL: process.env.STORE_GLOBAL_CANCEL_URL,
-    //returnURL: newOrder.order_status_url, // Utilisez l'URL du statut de commande pour retour vers la boutique Shopify après paiement
+    returnURL: newOrder.order_status_url, // Utilisez l'URL du statut de commande pour retour vers la boutique Shopify après paiement
   });
 
   return store;
@@ -105,6 +179,10 @@ function verifyWebhookHmac(data, hmacHeader) {
     .createHmac("sha256", secret)
     .update(data, "utf8")
     .digest("base64");
+
+  // Afficher le HMAC calculé dans la console
+  console.log("HMAC calculé:", hash);
+
   return hash === hmacHeader;
 }
 
@@ -169,11 +247,49 @@ async function markOrderAsPaid(session, orderId) {
   }
 }
 
+/*// Fonction pour ajouter l'URL de paiement aux métadonnées de la commande
+function addPaymentUrlToOrder(orderId, paymentUrl) {
+  return new shopify.clients.Rest({ session })
+    .post({
+      path: `orders/${orderId}/metafields`,
+      data: {
+        metafield: {
+          namespace: "payment",
+          key: "paydunya_url",
+          value: paymentUrl,
+          type: "url",
+        },
+      },
+    })
+    .then(() => {
+      console.log(`URL de paiement ajoutée à la commande ${orderId}`);
+      return paymentUrl; // Retourne l'URL après l'ajout réussi
+    })
+    .catch((error) => {
+      console.error("Erreur lors de l'ajout des métadonnées:", error);
+      throw new Error("Erreur lors de l'ajout des métadonnées.");
+    });
+}*/
+
 // Fonction pour créer une facture paydunya
-function createInvoice(store, newOrder) {
+function createInvoiceAndStoreUrl(store, newOrder) {
   /*// Configuration de la boutique PayDunya
   const store = configurePayDunyaStore(newOrder);
   console.log("Store dans la fonction createInvoice :", store);*/
+
+  if (newOrder.financial_status === "paid") {
+    throw new Error(
+      "La commande est déjà payée. Pas besoin de créer une nouvelle facture."
+    );
+  }
+
+  if (!store) {
+    throw new Error("Le store est manquant.");
+  }
+
+  if (!newOrder || !newOrder.id) {
+    throw new Error("Les données de commande sont manquantes.");
+  }
 
   // Création de l'instance de la facture PayDunya
   const invoice = new paydunya.CheckoutInvoice(setup, store);
@@ -201,59 +317,80 @@ function createInvoice(store, newOrder) {
   // Création de la facture et traitement du résultat
   console.log("Création de la facture...");
 
-  return invoice
-    .create()
-    .then(() => {
-      console.log("Création de la facture réussie");
-      console.log("Statut de la facture :", invoice.status);
-      console.log("Token de facture :", invoice.token);
-      console.log("Texte de réponse :", invoice.responseText);
-      console.log("URL de redirection :", invoice.url);
+  return (
+    invoice
+      .create()
+      .then(() => {
+        const paymentUrl = invoice.url; // Récupère l'URL de redirection de la facture
+        console.log(
+          `Création de la facture réussie, URL de paiement : ${paymentUrl}`
+        );
+        //console.log("Création de la facture réussie");
+        console.log("Statut de la facture :", invoice.status);
+        console.log("Token de facture :", invoice.token);
+        console.log("Texte de réponse :", invoice.responseText);
+        console.log("URL de redirection :", invoice.url);
 
-      return { token: invoice.token, url: invoice.url };
-    })
-    .catch((e) => {
-      console.error("Erreur lors de la création de la facture :", e);
-      throw new Error("Erreur lors de la création de la facture.");
-    });
+        return { token: invoice.token, url: invoice.url };
+        //return addPaymentUrlToOrder(newOrder.id, paymentUrl); // Ajouter l'URL dans les métadonnées
+        //return paymentUrl;
+      })
+      /*.then(() => {
+      console.log(`URL de paiement ajoutée à la commande ${newOrder.id}`);
+      // Teste que la méta donnée url paydunya est bien ajoutée
+      fetchOrderMetafields(newOrder.id);
+    })*/
+      .catch((e) => {
+        console.error(
+          "Erreur lors de la création de la facture ou de l'ajout des métadonnées:",
+          e
+        );
+        throw new Error(
+          "Erreur lors de la création de la facture ou de l'ajout des métadonnées."
+        );
+      })
+  );
 }
 
-// Fonction pour vérifier le statut du paiement avec le token de facture
-function checkPaymentStatus(store, token) {
-  /*if (!token) {
-    throw new Error("L'ID de commande est manquant ou invalide.");
-  }
+// // Fonction pour vérifier le statut du paiement avec le token de facture
+// function checkPaymentStatus(store, token) {
+//   /*if (!token) {
+//     throw new Error("L'ID de commande est manquant ou invalide.");
+//   }
 
-  const token = orderId; // Remplacer par le token du cache si nécessaire*/
+//   const token = orderId; // Remplacer par le token du cache si nécessaire*/
 
-  const invoice = new paydunya.CheckoutInvoice(setup, store);
+//   const invoice = new paydunya.CheckoutInvoice(setup, store);
 
-  //await invoice.confirm(token);
+//   //await invoice.confirm(token);
 
-  // Création de la facture et traitement du résultat
-  /*let status;
-  let responseText;*/
+//   // Création de la facture et traitement du résultat
+//   /*let status;
+//   let responseText;*/
 
-  return invoice
-    .confirm(token)
-    .then(() => {
-      console.log("Confirmation de la facture réussie");
-      console.log("Status de facture:", invoice.status);
-      console.log("Réponse du serveur Paydunya:", invoice.responseText);
+//   return invoice
+//     .confirm(token)
+//     .then(() => {
+//       console.log("Confirmation de la facture réussie");
+//       console.log("Status de facture:", invoice.status);
+//       console.log("Réponse du serveur Paydunya:", invoice.responseText);
 
-      return { status: invoice.status, responseText: invoice.responseText };
-    })
-    .catch((e) => {
-      console.error("Erreur lors de la confirmation de la facture:", e);
-      throw new Error("Erreur lors de la confirmation de la facture.");
-    });
-}
+//       return { status: invoice.status, responseText: invoice.responseText };
+//     })
+//     .catch((e) => {
+//       console.error("Erreur lors de la confirmation de la facture:", e);
+//       throw new Error("Erreur lors de la confirmation de la facture.");
+//     });
+// }
 
 // Route pour gérer le Webhook de création de commande
 app.post("/webhook/orders/create", async (req, res) => {
   try {
+    console.log("req.rawBody :", body);
     const hmacReceived = req.headers["x-shopify-hmac-sha256"];
     const body = req.rawBody;
+
+    console.log("HMAC reçu:", hmacReceived);
 
     if (!verifyWebhookHmac(body, hmacReceived)) {
       return res.status(401).send("Échec de validation HMAC.");
@@ -263,22 +400,73 @@ app.post("/webhook/orders/create", async (req, res) => {
 
     const store = configurePayDunyaStore(newOrder); // Configuration du store
 
-    createInvoice(store, newOrder).then(({ token, url }) => {
-      return checkPaymentStatus(store, token).then(
-        ({ status, responseText }) => {
-          res.status(200).json({
-            redirect_url: url,
-            payment_status: status,
-            response_text: responseText,
-          });
+    createInvoiceAndStoreUrl(store, newOrder) // Créer la facture et stocker l'URL de paiement
+      .then(({ url }) => {
+        if (url) {
+          console.log(`URL de paiement reçue: ${url}`); // Ajoutez ce log pour confirmer la valeur
+
+          const emailBody = createEmailBody(url); // Crée le corps de l'e-mail
+          /*await sendPaymentLinkEmail(
+            newOrder.email,
+            "Lien de paiement pour votre commande",
+            emailBody
+          ); // Envoie l'e-mail*/
+
+          return sendPaymentLinkEmail(
+            newOrder.email,
+            //"Lien de paiement pour votre commande LAMOZI",
+            `${newOrder.billing_address.name} - Lien de paiement pour votre commande LAMOZI, numéro : ${newOrder.order_number}`,
+            emailBody
+          ); // Envoie l'e-mail
+        } else {
+          console.error("URL de paiement est undefined.");
+          throw new Error("URL de paiement est undefined.");
         }
-      );
-    });
+
+        //res.status(200).send("Facture créée avec succès.");
+      })
+      .then(() => {
+        res.status(200).send("Facture créée avec succès.");
+      })
+      .catch((e) => {
+        console.error("Erreur lors de la création de la facture:", e);
+        res.status(500).send("Erreur lors de la création de la facture.");
+      });
   } catch (error) {
     console.error("Erreur lors de la création de la commande:", error);
     res.status(500).send("Erreur lors de la création de la commande.");
   }
 });
+
+/*async function fetchOrderMetafields(orderId) {
+  const restClient = new shopify.clients.Rest({ session }); // Assurez-vous d'avoir une session active
+
+  try {
+    const response = await restClient.get({
+      path: `orders/${orderId}/metafields`,
+    });
+
+    const metafields = response.body.metafields;
+    console.log("Métadonnées de la commande:", metafields);
+
+    // Recherchez le métadonnée contenant l'URL de paiement
+    const paymentMetafield = metafields.find(
+      (mf) => mf.namespace === "payment" && mf.key === "paydunya_url"
+    );
+
+    if (paymentMetafield) {
+      console.log("URL de paiement trouvée:", paymentMetafield.value);
+    } else {
+      console.warn("URL de paiement non trouvée dans les métadonnées.");
+    }
+  } catch (error) {
+    console.error("Erreur lors de la récupération des métadonnées:", error);
+  }
+}*/
+
+/*// Exemple d'utilisation
+const orderId = "5640176566530"; // Remplacez par l'ID de la commande à vérifier
+fetchOrderMetafields(orderId);*/
 
 // Route pour recevoir les notifications de paiement de PayDunya (IPN)
 app.post("/paydunya/ipn", async (req, res) => {
@@ -300,10 +488,15 @@ app.post("/paydunya/ipn", async (req, res) => {
       return res.status(400).send("L'ID de commande n'a pas pu être extrait.");
     }
 
+    const receiptUrl = req.body.data.receipt_url; // Récupère l'URL du reçu
+
     if (status === "completed") {
       const success = await markOrderAsPaid(session, orderId);
 
       if (success) {
+        // Ajout du lien de téléchargement du reçu comme métadonnée dans la commande
+        await addReceiptUrlToOrder(orderId, receiptUrl);
+
         res.status(200).send(`Paiement réussi pour la commande ${orderId}.`);
       } else {
         res
@@ -318,6 +511,31 @@ app.post("/paydunya/ipn", async (req, res) => {
     res.status(500).send("Erreur lors du traitement de l'IPN.");
   }
 });
+
+// Fonction pour ajouter le lien du reçu PDF comme métadonnée
+function addReceiptUrlToOrder(orderId, receiptUrl) {
+  return new shopify.clients.Rest({ session })
+    .post({
+      path: `orders/${orderId}/metafields`,
+      data: {
+        metafield: {
+          namespace: "payment",
+          key: "receipt_url",
+          value: receiptUrl,
+          type: "url",
+        },
+      },
+    })
+    .then(() => {
+      console.log(
+        `Lien de téléchargement du reçu ajouté à la commande ${orderId}`
+      );
+    })
+    .catch((error) => {
+      console.error("Erreur lors de l'ajout des métadonnées:", error);
+      throw new Error("Erreur lors de l'ajout des métadonnées.");
+    });
+}
 
 // Démarre le serveur
 app.listen(PORT, async () => {
