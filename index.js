@@ -277,6 +277,16 @@ function createInvoiceAndStoreUrl(store, newOrder) {
   const store = configurePayDunyaStore(newOrder);
   console.log("Store dans la fonction createInvoice :", store);*/
 
+  const orderCreatedDate = new Date(newOrder.created_at);
+  const now = new Date();
+  const ageInHours = (now - orderCreatedDate) / 36e5; // Convertir en heures
+
+  if (ageInHours > 24) {
+    throw new Error(
+      "La commande est trop ancienne pour créer une nouvelle facture."
+    );
+  }
+
   if (newOrder.financial_status === "paid") {
     throw new Error(
       "La commande est déjà payée. Pas besoin de créer une nouvelle facture."
