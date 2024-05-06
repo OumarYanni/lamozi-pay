@@ -190,7 +190,7 @@ function verifyWebhookHmac(data, hmacHeader) {
     .digest("base64");
 
   // Afficher le HMAC calculé dans la console
-  console.log("HMAC calculé:", hash);
+  //console.log("HMAC calculé:", hash);
 
   return hash === hmacHeader;
 }
