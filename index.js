@@ -144,7 +144,7 @@ var setup = new paydunya.Setup({
   privateKey: process.env.PAYDUNYA_PRIVATE_KEY,
   publicKey: process.env.PAYDUNYA_PUBLIC_KEY,
   token: process.env.PAYDUNYA_TOKEN,
-  mode: "test", // Utilisez 'live' pour le mode production
+  mode: "live", // Utilisez 'live' pour le mode production
 });
 
 // Configure les informations de la boutique pour PayDunya
