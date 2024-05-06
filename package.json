@@ -12,6 +12,11 @@
   "author": "Oumar Yanni",
   "license": "",
   "dependencies": {
+    "@babel/cli": "^7.23.9",
+    "@babel/core": "^7.24.0",
+    "@babel/node": "^7.23.9",
+    "@babel/plugin-transform-modules-commonjs": "^7.23.3",
+    "@babel/preset-env": "^7.24.0",
     "@babel/polyfill": "^7.12.1",
     "@shopify/shopify-api": "^9.7.2",
     "axios": "^1.6.8",
@@ -23,11 +28,5 @@
     "nodemailer": "^6.9.13",
     "paydunya": "^1.0.12"
   },
-  "devDependencies": {
-    "@babel/cli": "^7.23.9",
-    "@babel/core": "^7.24.0",
-    "@babel/node": "^7.23.9",
-    "@babel/plugin-transform-modules-commonjs": "^7.23.3",
-    "@babel/preset-env": "^7.24.0"
-  }
+  "devDependencies": {}
 }
