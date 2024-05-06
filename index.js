@@ -34,6 +34,15 @@ import { url } from "inspector";
 import nodemailer from "nodemailer";
 import { error } from "console";
 
+//Importe Memecached Cloud pour le caching
+import memjs from "memjs";
+
+// Configurez Memcached Cloud
+const memcached = memjs.Client.create(process.env.MEMCACHEDCLOUD_SERVERS, {
+  username: process.env.MEMCACHEDCLOUD_USERNAME,
+  password: process.env.MEMCACHEDCLOUD_PASSWORD,
+});
+
 // Configuration du transport SMTP avec Nodemailer et OVH
 const transporter = nodemailer.createTransport({
   host: "ssl0.ovh.net", // Hôte SMTP d'OVH
@@ -282,23 +291,30 @@ function createInvoiceAndStoreUrl(store, newOrder) {
   const ageInHours = (now - orderCreatedDate) / 36e5; // Convertir en heures
 
   if (ageInHours > 24) {
-    throw new Error(
-      "La commande est trop ancienne pour créer une nouvelle facture."
+    // Au lieu de lancer une exception, retournez un message d'erreur
+    return Promise.reject(
+      new Error(
+        "La commande est trop ancienne pour créer une nouvelle facture."
+      )
     );
   }
 
   if (newOrder.financial_status === "paid") {
-    throw new Error(
-      "La commande est déjà payée. Pas besoin de créer une nouvelle facture."
+    return Promise.reject(
+      new Error(
+        "La commande est déjà payée. Pas besoin de créer une nouvelle facture."
+      )
     );
   }
 
   if (!store) {
-    throw new Error("Le store est manquant.");
+    return Promise.reject(new Error("Le store est manquant."));
   }
 
   if (!newOrder || !newOrder.id) {
-    throw new Error("Les données de commande sont manquantes.");
+    return Promise.reject(
+      new Error("Les données de commande sont manquantes.")
+    );
   }
 
   // Création de l'instance de la facture PayDunya
@@ -412,40 +428,57 @@ app.post("/webhook/orders/create", async (req, res) => {
         .send("Commande ignorée car non issue de LAMOZI Pay.");
     }
 
-    const store = configurePayDunyaStore(newOrder); // Configuration du store
+    memcached.get(newOrder.id.toString(), (err, value) => {
+      if (err) {
+        console.error("Erreur lors de la vérification de Memcached:", err);
+        return res
+          .status(500)
+          .send("Erreur serveur lors de la vérification de la commande.");
+      }
 
-    createInvoiceAndStoreUrl(store, newOrder) // Créer la facture et stocker l'URL de paiement
-      .then(({ url }) => {
-        if (url) {
-          console.log(`URL de paiement reçue: ${url}`); // Ajoutez ce log pour confirmer la valeur
+      if (value) {
+        console.log(`Commande ${newOrder.id} déjà traitée.`);
+        return res.status(200).send("Commande déjà traitée.");
+      }
 
-          const emailBody = createEmailBody(url); // Crée le corps de l'e-mail
-          /*await sendPaymentLinkEmail(
+      const store = configurePayDunyaStore(newOrder); // Configuration du store
+
+      createInvoiceAndStoreUrl(store, newOrder) // Créer la facture et stocker l'URL de paiement
+        .then(({ url }) => {
+          if (url) {
+            console.log(`URL de paiement reçue: ${url}`); // Ajoutez ce log pour confirmer la valeur
+
+            const emailBody = createEmailBody(url); // Crée le corps de l'e-mail
+            /*await sendPaymentLinkEmail(
             newOrder.email,
             "Lien de paiement pour votre commande",
             emailBody
           ); // Envoie l'e-mail*/
 
-          return sendPaymentLinkEmail(
-            newOrder.email,
-            //"Lien de paiement pour votre commande LAMOZI",
-            `${newOrder.billing_address.name} - Lien de paiement pour votre commande LAMOZI, numéro : ${newOrder.order_number}`,
-            emailBody
-          ); // Envoie l'e-mail
-        } else {
-          console.error("URL de paiement est undefined.");
-          throw new Error("URL de paiement est undefined.");
-        }
+            // Ajoutez la commande au cache avec une expiration
+            memcached.set(newOrder.id.toString(), "processed");
 
-        //res.status(200).send("Facture créée avec succès.");
-      })
-      .then(() => {
-        res.status(200).send("Facture créée avec succès.");
-      })
-      .catch((e) => {
-        console.error("Erreur lors de la création de la facture:", e);
-        res.status(500).send("Erreur lors de la création de la facture.");
-      });
+            return sendPaymentLinkEmail(
+              newOrder.email,
+              //"Lien de paiement pour votre commande LAMOZI",
+              `${newOrder.billing_address.name} - Lien de paiement pour votre commande LAMOZI, numéro : ${newOrder.order_number}`,
+              emailBody
+            ); // Envoie l'e-mail
+          } else {
+            console.error("URL de paiement est undefined.");
+            throw new Error("URL de paiement est undefined.");
+          }
+
+          //res.status(200).send("Facture créée avec succès.");
+        })
+        .then(() => {
+          res.status(200).send("Facture créée avec succès.");
+        })
+        .catch((e) => {
+          console.error("Erreur lors de la création de la facture:", e);
+          res.status(500).send("Erreur lors de la création de la facture.");
+        });
+    });
   } catch (error) {
     console.error("Erreur lors de la création de la commande:", error);
     res.status(500).send("Erreur lors de la création de la commande.");
@@ -481,6 +514,35 @@ app.post("/webhook/orders/create", async (req, res) => {
 /*// Exemple d'utilisation
 const orderId = "5640176566530"; // Remplacez par l'ID de la commande à vérifier
 fetchOrderMetafields(orderId);*/
+
+// Fonction pour vérifier le niveau de remplissage du cache
+function checkCacheUsage() {
+  memcached.stats((err, stats) => {
+    if (err) {
+      console.error(
+        "Erreur lors de la récupération des statistiques du cache :",
+        err
+      );
+    } else {
+      const cacheUsage = parseFloat(stats[0].curr_bytes) / (30 * 1024 * 1024); // Convertir en pourcentage
+      if (cacheUsage >= 0.8) {
+        // Si le cache est à 80 % de remplissage, nettoyez
+        memcached.flush((err) => {
+          if (err) {
+            console.error("Erreur lors du nettoyage du cache :", err);
+          } else {
+            console.log("Cache Memcached nettoyé car il était à plus de 80 %.");
+          }
+        });
+      }
+    }
+  });
+}
+
+// Planifier la vérification toutes les 12 heures
+const CLEAN_INTERVAL = 12 * 60 * 60 * 1000; // 12 heures en millisecondes
+
+setInterval(checkCacheUsage, CLEAN_INTERVAL);
 
 // Route pour recevoir les notifications de paiement de PayDunya (IPN)
 app.post("/paydunya/ipn", async (req, res) => {
