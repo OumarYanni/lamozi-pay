@@ -37,6 +37,9 @@ import { error } from "console";
 //Importe Memecached Cloud pour le caching
 import memjs from "memjs";
 
+//Ajout de node-cron pour la planifaction des tâches principalement pour memjs
+import cron from "node-cron";
+
 // Configurez Memcached Cloud
 const memcached = memjs.Client.create(process.env.MEMCACHEDCLOUD_SERVERS, {
   username: process.env.MEMCACHEDCLOUD_USERNAME,
@@ -612,6 +615,41 @@ function addReceiptUrlToOrder(orderId, receiptUrl) {
       throw new Error("Erreur lors de l'ajout des métadonnées.");
     });
 }
+
+// Planification de l'écriture périodique dans Memcached pour maintenir l'activité et ne pas perdre la database gratuite au bout de 30j
+
+// Tâche cron toutes les 5 minutes pour maintenir l'activité de Memcached
+cron.schedule("*/5 * * * *", () => {
+  const key = "keepalive";
+  const value = "active";
+
+  memcached.set(key, value, { expires: 3600 }, (err) => {
+    if (err) {
+      console.error(
+        "Erreur lors de l'écriture de la tâche cron dans Memcached:",
+        err
+      );
+    } else {
+      console.log(
+        "Tâche cron exécutée : Memcached keepalive écrit avec succès."
+      );
+    }
+  });
+});
+
+// Tâche cron hebdomadaire (chaque dimanche à minuit ("0 0 * * 0")) pour maintenir l'activité de Memcached (commentée par défaut)
+// cron.schedule("0 0 * * 0", () => {
+//   const key = "keepalive";
+//   const value = "active";
+
+//   memcached.set(key, value, { expires: 3600 }, (err) => {
+//     if (err) {
+//       console.error("Erreur lors de l'écriture de la tâche cron hebdomadaire dans Memcached:", err);
+//     } else {
+//       console.log("Tâche cron hebdomadaire exécutée : Memcached keepalive écrit avec succès.");
+//     }
+//   });
+// });
 
 // Démarre le serveur
 app.listen(PORT, async () => {
