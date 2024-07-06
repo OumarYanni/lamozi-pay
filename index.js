@@ -1,3 +1,5 @@
+require("newrelic");
+
 // Importe le module dotenv pour charger les variables d'environnement depuis le fichier .env
 import dotenv from "dotenv";
 // Exécute la configuration de dotenv pour accéder aux variables d'environnement
