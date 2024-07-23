@@ -621,42 +621,61 @@ function addReceiptUrlToOrder(orderId, receiptUrl) {
 // Planification de l'écriture périodique dans Memcached pour maintenir l'activité et ne pas perdre la database gratuite au bout de 30j
 
 // Tâche cron toutes les 5 minutes pour maintenir l'activité de Memcached
-cron.schedule("*/5 * * * *", () => {
-  const key = "keepalive";
-  const value = "active";
-
-  memcached.set(key, value, { expires: 3600 }, (err) => {
-    if (err) {
-      console.error(
-        "Erreur lors de l'écriture de la tâche cron dans Memcached:",
-        err
-      );
-    } else {
-      console.log(
-        "Tâche cron exécutée : Memcached keepalive écrit avec succès."
-      );
-    }
-  });
-});
-
-// Tâche cron hebdomadaire (chaque dimanche à minuit ("0 0 * * 0")) pour maintenir l'activité de Memcached
-// cron.schedule("0 0 * * 0", () => {
+// cron.schedule("*/5 * * * *", () => {
 //   const key = "keepalive";
 //   const value = "active";
 
 //   memcached.set(key, value, { expires: 3600 }, (err) => {
 //     if (err) {
 //       console.error(
-//         "Erreur lors de l'écriture de la tâche cron hebdomadaire dans Memcached:",
+//         "Erreur lors de l'écriture de la tâche cron dans Memcached:",
 //         err
 //       );
 //     } else {
 //       console.log(
-//         "Tâche cron hebdomadaire exécutée : Memcached keepalive écrit avec succès."
+//         "Tâche cron exécutée : Memcached keepalive écrit avec succès."
 //       );
 //     }
 //   });
 // });
+
+// Tâche cron journalière à 00h10
+// cron.schedule("10 0 * * *", () => {
+//   const key = "keepalive";
+//   const value = "active";
+
+//   memcached.set(key, value, { expires: 3600 }, (err) => {
+//     if (err) {
+//       console.error(
+//         "Erreur lors de l'écriture de la tâche cron journalière dans Memcached:",
+//         err
+//       );
+//     } else {
+//       console.log(
+//         "Tâche cron journalière exécutée : Memcached keepalive écrit avec succès."
+//       );
+//     }
+//   });
+// });
+
+// Tâche cron hebdomadaire (chaque dimanche à minuit dix 00h10 ("10 0 * * 0")) pour maintenir l'activité de Memcached
+cron.schedule("10 0 * * 0", () => {
+  const key = "keepalive";
+  const value = "active";
+
+  memcached.set(key, value, { expires: 3600 }, (err) => {
+    if (err) {
+      console.error(
+        "Erreur lors de l'écriture de la tâche cron hebdomadaire dans Memcached:",
+        err
+      );
+    } else {
+      console.log(
+        "Tâche cron hebdomadaire exécutée : Memcached keepalive écrit avec succès."
+      );
+    }
+  });
+});
 
 // Démarre le serveur
 app.listen(PORT, async () => {
